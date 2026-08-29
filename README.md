@@ -18,3 +18,4 @@ The main objective of this project is to provide a simple and personalized way f
 
 The objective of the system is to improve music discovery by combining mood, activity, and genre information to generate relevant song recommendations for users.
 
+Main branch update before rebase
