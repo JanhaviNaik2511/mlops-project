@@ -1,9 +1,6 @@
 import streamlit as st
-import pandas as pd
-
 from src.predict import ContextPlaylistRecommender, CONTEXT_PRESETS
-from src.similar_songs import SimilarSongRecommender
-
+from src.playlist_export import export_playlist
 
 st.set_page_config(
     page_title="Context Music Generator",
@@ -23,14 +20,8 @@ def load_model():
     return ContextPlaylistRecommender()
 
 
-@st.cache_resource
-def load_similar_song_model():
-    return SimilarSongRecommender()
-
-
 try:
     engine = load_model()
-    similar_engine = load_similar_song_model()
 
     # Extract unique genres for optional filtering
     available_genres = [
@@ -47,17 +38,17 @@ try:
         gap="medium"
     )
 
+    # =========================================================
+    # LEFT COLUMN - CONFIGURATION
+    # =========================================================
+
     with col_left:
 
         st.subheader("1. Configure Context")
 
         mode = st.radio(
             "Selection Mode",
-            [
-                "Activity Preset",
-                "Custom Sliders",
-                "Similar Songs"
-            ]
+            ["Activity Preset", "Custom Sliders"]
         )
 
         selected_genre = st.selectbox(
@@ -72,10 +63,6 @@ try:
             value=10
         )
 
-        # -------------------------------------------------
-        # EXISTING FEATURE 1: ACTIVITY PRESET
-        # -------------------------------------------------
-
         if mode == "Activity Preset":
 
             preset = st.selectbox(
@@ -83,15 +70,9 @@ try:
                 list(CONTEXT_PRESETS.keys())
             )
 
-        # -------------------------------------------------
-        # EXISTING FEATURE 2: CUSTOM SLIDERS
-        # -------------------------------------------------
+        else:
 
-        elif mode == "Custom Sliders":
-
-            st.markdown(
-                "**Fine-tune Audio Dynamics:**"
-            )
+            st.markdown("**Fine-tune Audio Dynamics:**")
 
             danceability = st.slider(
                 "Danceability",
@@ -147,74 +128,20 @@ try:
                 "liveness": 0.15
             }
 
-        # -------------------------------------------------
-        # YOUR NEW FEATURE: SIMILAR SONGS
-        # -------------------------------------------------
-
-        else:
-
-            st.markdown(
-                "**Find Songs Similar To:**"
-            )
-
-            song_search = st.text_input(
-                "Search by song name or artist",
-                placeholder="Example: love, imagine, weeknd..."
-            )
-
-            selected_song = None
-
-            if song_search:
-
-                search_results = similar_engine.search_songs(
-                    song_search,
-                    limit=20
-                )
-
-                if len(search_results) > 0:
-
-                    song_options = [
-                        f"{row['track_name']} — {row['artists']}"
-                        for _, row in search_results.iterrows()
-                    ]
-
-                    selected_song_option = st.selectbox(
-                        "Select a song",
-                        song_options
-                    )
-
-                    selected_position = song_options.index(
-                        selected_song_option
-                    )
-
-                    selected_song = search_results.iloc[
-                        selected_position
-                    ]
-
-                else:
-
-                    st.warning(
-                        "No songs found. Try another search."
-                    )
-
         generate = st.button(
             "Generate Playlist",
             use_container_width=True
         )
 
-    # =====================================================
-    # RIGHT SIDE: RECOMMENDATIONS
-    # =====================================================
+    # =========================================================
+    # RIGHT COLUMN - RECOMMENDATIONS
+    # =========================================================
 
     with col_right:
 
         st.subheader("2. Recommended Playlist")
 
         if generate:
-
-            # -------------------------------------------------
-            # ACTIVITY PRESET
-            # -------------------------------------------------
 
             if mode == "Activity Preset":
 
@@ -224,11 +151,7 @@ try:
                     top_n=num_tracks
                 )
 
-            # -------------------------------------------------
-            # CUSTOM SLIDERS
-            # -------------------------------------------------
-
-            elif mode == "Custom Sliders":
+            else:
 
                 results = engine.recommend_by_vector(
                     custom_vector,
@@ -236,28 +159,9 @@ try:
                     top_n=num_tracks
                 )
 
-            # -------------------------------------------------
-            # SIMILAR SONGS
-            # -------------------------------------------------
-
-            else:
-
-                if selected_song is not None:
-
-                    results = similar_engine.recommend_similar(
-                        track_name=selected_song["track_name"],
-                        artist=selected_song["artists"],
-                        target_genre=selected_genre,
-                        top_n=num_tracks
-                    )
-
-                else:
-
-                    results = pd.DataFrame()
-
-            # -------------------------------------------------
+            # =================================================
             # DISPLAY RESULTS
-            # -------------------------------------------------
+            # =================================================
 
             if len(results) > 0:
 
@@ -266,27 +170,39 @@ try:
                     use_container_width=True
                 )
 
+                # =================================================
+                # NEW FEATURE:
+                # DOWNLOAD RECOMMENDED PLAYLIST AS CSV
+                # =================================================
+
+                st.markdown("### 📥 Export Playlist")
+
+                csv_data = export_playlist(results)
+
+                st.download_button(
+                    label="⬇️ Download Playlist as CSV",
+                    data=csv_data,
+                    file_name="recommended_playlist.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
+
+                st.success(
+                    "Playlist generated successfully! "
+                    "You can download it using the button above."
+                )
+
             else:
 
-                if mode == "Similar Songs":
-
-                    st.warning(
-                        "Please search for and select a song "
-                        "before generating recommendations."
-                    )
-
-                else:
-
-                    st.warning(
-                        "No tracks found for the selected "
-                        "genre filter."
-                    )
+                st.warning(
+                    "No tracks found for the selected genre filter."
+                )
 
         else:
 
             st.info(
-                "Choose your mood/activity parameters "
-                "and click **Generate Playlist**."
+                "Choose your mood/activity parameters and click "
+                "**Generate Playlist**."
             )
 
 
